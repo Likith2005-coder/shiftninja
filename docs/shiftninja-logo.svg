@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b6cff" />
+      <stop offset="1" stop-color="#4338ca" />
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.35" />
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#eef0ff" />
+    </linearGradient>
+  </defs>
+  <rect x="48" y="48" width="928" height="928" rx="220" fill="url(#bg)" />
+  <rect x="48" y="48" width="928" height="928" rx="220" fill="url(#gloss)" />
+  <!-- the wheel: eight coloured petals -->
+  <g transform="translate(512 512)" stroke-width="64" fill="none" stroke-linecap="round">
+    <path d="M46.9 -296.3 A300 300 0 0 1 176.3 -242.7" stroke="#60a5fa" />
+    <path d="M242.7 -176.3 A300 300 0 0 1 296.3 -46.9" stroke="#22d3ee" />
+    <path d="M296.3 46.9 A300 300 0 0 1 242.7 176.3" stroke="#34d399" />
+    <path d="M176.3 242.7 A300 300 0 0 1 46.9 296.3" stroke="#a3e635" />
+    <path d="M-46.9 296.3 A300 300 0 0 1 -176.3 242.7" stroke="#fbbf24" />
+    <path d="M-242.7 176.3 A300 300 0 0 1 -296.3 46.9" stroke="#fb923c" />
+    <path d="M-296.3 -46.9 A300 300 0 0 1 -242.7 -176.3" stroke="#f472b6" />
+    <path d="M-176.3 -242.7 A300 300 0 0 1 -46.9 -296.3" stroke="#c4b5fd" />
+  </g>
+  <!-- the document -->
+  <g transform="translate(512 512)">
+    <path d="M-130 -175 H55 L135 -95 V175 H-130 Z" fill="url(#page)" />
+    <path d="M55 -175 V-95 H135 Z" fill="#c7c2ff" />
+    <rect x="-82" y="-60" width="170" height="26" rx="13" fill="#6d5cf6" />
+    <rect x="-82" y="0" width="170" height="26" rx="13" fill="#a5b4fc" />
+    <rect x="-82" y="60" width="120" height="26" rx="13" fill="#a5b4fc" />
+  </g>
+</svg>

@@ -1,0 +1,326 @@
+@font-face {
+  font-family: "Inter Tight";
+  src: url("fonts/InterTight.ttf") format("truetype");
+  font-weight: 100 900;
+}
+
+:root {
+  --label: #17330f;
+  --label-muted: rgba(92, 107, 85, 0.85);
+  --divider: rgba(255, 255, 255, 0.55);
+  --accent: rgba(111, 91, 224, 0.92);
+  --accent-solid: #6f5be0;
+  --accent-2: #9d7bff;
+  --accent-label: #fff8f1;
+  --accent-glow: rgba(111, 91, 224, 0.55);
+  --ok: #3f8e2e;
+  --bad: #b4446c;
+  --standin: rgba(255, 250, 246, 0.66);
+  --standin-edge: rgba(255, 255, 255, 0.95);
+  --frost: rgba(255, 255, 255, 0.6);
+  --petal-opacity: 0.3;
+  --petal-stroke: rgba(255, 255, 255, 0.9);
+  --hub-opacity: 1;
+  --caustic: rgba(255, 255, 255, 0.55);
+  --track: rgba(255, 255, 255, 0.5);
+  --spring: cubic-bezier(0.32, 1.45, 0.5, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --label: #fff8f1;
+    --label-muted: rgba(255, 248, 241, 0.6);
+    --divider: rgba(255, 255, 255, 0.2);
+    --accent: rgba(124, 108, 240, 0.85);
+    --accent-solid: #7c6cf0;
+    --accent-2: #b39cff;
+    --accent-glow: rgba(140, 120, 255, 0.7);
+    --ok: #6fd35c;
+    --bad: #ff7aa5;
+    --standin: rgba(26, 24, 36, 0.7);
+    --standin-edge: rgba(255, 255, 255, 0.3);
+    --frost: rgba(255, 255, 255, 0.14);
+    --petal-opacity: 0.24;
+    --petal-stroke: rgba(255, 255, 255, 0.35);
+    --hub-opacity: 0.22;
+    --caustic: rgba(190, 175, 255, 0.28);
+    --track: rgba(255, 255, 255, 0.12);
+  }
+}
+
+html, body {
+  margin: 0;
+  width: 320px;
+  height: 320px;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  font: 700 11.5px/1 "Inter Tight", -apple-system, "Segoe UI Variable", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  opacity: 0;
+  transform: scale(0.82) rotate(-8deg);
+  transform-origin: 160px 160px;
+  --lx: 38%;
+  --ly: 22%;
+}
+
+#root.open {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+  transition: transform 200ms var(--spring), opacity 90ms ease-out;
+}
+
+#root.closing {
+  opacity: 0;
+  transform: scale(0.7);
+  transition: transform 140ms cubic-bezier(0.5, 0, 0.75, 0), opacity 140ms ease-in;
+}
+
+/* Glass layers: the stand-in disk (blur of what's behind), plus a light that follows the cursor. */
+#disk, #caustic {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Glass drawn in CSS: a frosted sheen on top, rainbow light caught in the edge, a translucent body. No backdrop
+   blur: a transparent window can't blur the desktop anyway, and it costs a full repaint each frame. */
+#disk {
+  background:
+    radial-gradient(120% 70% at 30% 6%, var(--frost), transparent 52%),
+    radial-gradient(circle at 50% 50%, transparent 62%, rgba(255, 255, 255, 0.10) 70%, transparent 76%),
+    conic-gradient(from 200deg, rgba(255, 122, 217, 0.22), rgba(124, 200, 255, 0.22), rgba(120, 230, 190, 0.18),
+      rgba(255, 210, 122, 0.22), rgba(169, 139, 255, 0.22), rgba(255, 122, 217, 0.22)),
+    var(--standin);
+  box-shadow:
+    inset 0 2px 1px var(--standin-edge),
+    inset 0 -3px 8px rgba(255, 255, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+    inset 0 0 36px rgba(255, 255, 255, 0.12),
+    0 4px 9px rgba(20, 10, 60, 0.28);
+}
+
+body.native-glass #disk { display: none; }
+
+/* The light is its own GPU layer and only ever moves with transform, so following the cursor never repaints. */
+#caustic { overflow: hidden; }
+#caustic i {
+  position: absolute;
+  left: -90px;
+  top: -90px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--caustic), transparent 68%);
+  will-change: transform;
+  transform: translate3d(114px, 66px, 0);
+  transition: transform 120ms ease-out;
+}
+
+#wheel {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+}
+
+#sheen-disk { pointer-events: none; }
+
+#track {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  pointer-events: none;
+}
+
+/* Petals */
+.slice {
+  transform-box: view-box;
+  transform-origin: 160px 160px;
+  transition: transform 150ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  animation: petal-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
+  animation-delay: calc(var(--i) * 12ms);
+}
+
+#root.swap-next .slice { animation: swap-next 220ms cubic-bezier(0.2, 0.9, 0.3, 1.1) backwards; animation-delay: calc(var(--i) * 8ms); }
+#root.swap-prev .slice { animation: swap-prev 220ms cubic-bezier(0.2, 0.9, 0.3, 1.1) backwards; animation-delay: calc(var(--i) * 8ms); }
+
+@keyframes petal-in {
+  from { opacity: 0; transform: scale(0.8) rotate(-10deg); }
+}
+@keyframes swap-next {
+  from { opacity: 0; transform: rotate(-40deg) scale(0.85); }
+}
+@keyframes swap-prev {
+  from { opacity: 0; transform: rotate(40deg) scale(0.85); }
+}
+
+/* Each petal is tinted glass in its own colour (fill and stroke share one opaque gradient, then fade as a whole). */
+.slice .petal {
+  stroke-width: 16;
+  stroke-linejoin: round;
+  opacity: var(--petal-opacity);
+  transition: opacity 90ms ease-out;
+}
+
+.slice .halo {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 30;
+  stroke-linejoin: round;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+
+.slice .shine {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  opacity: 0.0;
+  transition: opacity 200ms ease-out;
+  pointer-events: none;
+}
+
+.slice text {
+  fill: var(--label);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  transition: fill 160ms ease-out;
+}
+
+.slice .icon {
+  fill: none;
+  stroke: var(--ci);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transition: stroke 160ms ease-out;
+}
+
+.slice .icon-wrap {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 160ms var(--spring);
+}
+
+.slice .key {
+  fill: var(--label-muted);
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
+.slice.hot { transform: translate(var(--dx), var(--dy)); }
+.slice.hot .petal { opacity: 0.97; }
+.slice.hot .halo { opacity: 0.22; }
+.slice.hot .shine { opacity: 0.7; }
+.slice.hot text, .slice.hot .key { fill: var(--accent-label); }
+.slice.hot .icon { stroke: var(--accent-label); }
+.slice.hot .icon-wrap { transform: scale(1.18) translateY(-1px); }
+.slice.dim .petal { opacity: calc(var(--petal-opacity) * 0.6); }
+.slice.dim text, .slice.dim .icon { opacity: 0.6; }
+
+@media (prefers-color-scheme: dark) {
+  .slice .icon { stroke: var(--ci-dark); }
+}
+
+/* Direction pointer on the inner ring */
+#pointer {
+  fill: none;
+  stroke: var(--hot, var(--accent-solid));
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+}
+#root.aiming #pointer { opacity: 0.85; }
+
+/* Hub */
+#hub {
+  fill: url(#hub-glass);
+  fill-opacity: var(--hub-opacity);
+  cursor: pointer;
+  transform-box: view-box;
+  transform-origin: 160px 160px;
+  transition: transform 260ms var(--spring);
+}
+#root.hub-hover #hub { transform: scale(1.06); }
+
+#progress {
+  fill: none;
+  stroke: var(--hot, var(--accent-solid));
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 22 78;
+  opacity: 0;
+  pointer-events: none;
+  transform-box: view-box;
+  transform-origin: 160px 160px;
+  transition: opacity 160ms ease-out, stroke 200ms ease-out;
+}
+#root.busy #progress { opacity: 1; animation: spin 0.8s linear infinite; }
+#root.done #progress { opacity: 1; stroke: var(--ok); stroke-dasharray: 100 0; transition: stroke-dasharray 360ms ease-out, stroke 200ms; }
+#root.failed #progress { opacity: 1; stroke: var(--bad); stroke-dasharray: 100 0; }
+#root.failed #hub, #root.failed #hub-top, #root.failed #hub-bottom { animation: shake 420ms ease-in-out; transform-box: view-box; transform-origin: 160px 160px; }
+
+.rim {
+  fill: none;
+  stroke: url(#rim);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+#hub-top { fill: var(--label); font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em; }
+#hub-bottom { fill: var(--label-muted); font-size: 9px; font-weight: 800; letter-spacing: 0.12em; }
+#hub-top, #hub-bottom { pointer-events: none; transition: opacity 120ms ease-out; }
+#root.done #hub-top { fill: var(--ok); }
+#root.failed #hub-top { fill: var(--bad); }
+#root.blink #hub-top, #root.blink #hub-bottom { opacity: 0.25; }
+
+#dots { pointer-events: none; }
+#dots circle { fill: var(--label-muted); opacity: 0.45; transition: opacity 200ms, fill 200ms, r 260ms var(--spring); }
+#dots circle.on { fill: var(--hot, var(--accent-solid)); opacity: 1; }
+
+#ripple {
+  fill: none;
+  stroke: var(--hot, var(--accent-solid));
+  stroke-width: 2;
+  opacity: 0;
+  pointer-events: none;
+  transform-box: view-box;
+}
+#ripple.go { animation: ripple 560ms ease-out; }
+
+@keyframes ripple {
+  from { opacity: 0.8; r: 10; stroke-width: 6; }
+  to { opacity: 0; r: 70; stroke-width: 0.5; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shake {
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slice, #root.open, #root.busy #progress { animation: none !important; transition: none !important; }
+}

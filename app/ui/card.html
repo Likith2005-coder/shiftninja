@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ShiftNinja</title>
+  <link rel="stylesheet" href="card.css" />
+</head>
+<body>
+  <div id="ambient" aria-hidden="true"></div>
+
+  <header>
+    <span class="mark" aria-hidden="true"></span>
+    <div class="brand">
+      <h1>ShiftNinja</h1>
+      <p id="status" data-t="tagline">PDF, Word &amp; photo tools</p>
+    </div>
+    <button id="lang" class="chip" type="button">हिंदी</button>
+  </header>
+
+  <section class="glass how">
+    <h2 data-t="how">How to use</h2>
+    <ol>
+      <li><b>1</b><span data-t="step1">Start dragging any PDF, Word file or photo</span></li>
+      <li><b>2</b><span data-t="step2">Press <kbd>Shift</kbd> – a wheel opens</span></li>
+      <li><b>3</b><span data-t="step3">Drop it on a petal. The new file is saved next to the original</span></li>
+    </ol>
+    <p class="small" id="shortcut-tip"></p>
+    <p class="small" data-t="more">Tap <kbd>Shift</kbd> again (or scroll) for the Tools wheel: crop, compress, passport photos, merge…</p>
+  </section>
+
+  <section class="glass settings">
+    <label class="switch">
+      <input id="autostart" type="checkbox" />
+      <i></i>
+      <span><b data-t="autostart">Start with Windows</b><small data-t="autostart-sub">So the Shift wheel is always ready</small></span>
+    </label>
+  </section>
+
+  <footer>
+    <span id="version"></span> · by Likith B S
+    <details>
+      <summary data-t="licences">Open-source licences</summary>
+      <pre>ShiftNinja © 2026 Likith B S. All rights reserved.
+
+PDFium (PDF rendering): BSD-3-Clause / Apache-2.0, © The PDFium Authors.
+Inter Tight font: SIL Open Font License 1.1, © The Inter Tight Project Authors.</pre>
+    </details>
+  </footer>
+
+  <div id="toast" role="status"></div>
+  <script src="card.js"></script>
+</body>
+</html>

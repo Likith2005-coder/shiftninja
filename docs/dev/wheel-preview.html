@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Wheel preview</title>
+  <link rel="stylesheet" href="../../app/ui/wheel.css" />
+  <style>
+    html { width: auto !important; height: auto !important; }
+    body {
+      width: 360px !important;
+      height: 360px !important;
+      padding: 20px;
+      box-sizing: border-box;
+      background:
+        radial-gradient(circle at 20% 25%, #ffd36e 0 14%, transparent 15%),
+        radial-gradient(circle at 78% 70%, #6fa8ff 0 18%, transparent 19%),
+        repeating-linear-gradient(45deg, rgba(255,255,255,.18) 0 6px, transparent 6px 18px),
+        linear-gradient(135deg, #f3b13d, #e8553d 55%, #8e7cc3) !important;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    window.log = [];
+    const listeners = {};
+    let onDrop;
+    window.__TAURI__ = {
+      core: {
+        invoke: async (cmd, args) => {
+          log.push([cmd, args]);
+          if (cmd === "run_action") {
+            await new Promise((r) => setTimeout(r, 400));
+            return [args.paths[0].replace(/\.\w+$/, "." + args.id.split(".")[1])];
+          }
+        },
+      },
+      event: { listen: (name, fn) => { listeners[name] = fn; } },
+      webview: { getCurrentWebview: () => ({ onDragDropEvent: (fn) => { onDrop = fn; } }) },
+    };
+    window.emit = (name, payload) => listeners[name]({ payload });
+    window.drag = (type, x, y, paths = []) => onDrop({ payload: { type, position: { x, y }, paths } });
+
+    const SAMPLE = {
+      paths: ["/Users/me/Desktop/Page 001.pdf"],
+      actions: [
+        { id: "convert.jpg", title: "JPG", wheel: "convert" },
+        { id: "convert.png", title: "PNG", wheel: "convert" },
+        { id: "convert.txt", title: "TXT", wheel: "convert" },
+        { id: "convert.webp", title: "WEBP", wheel: "convert" },
+        { id: "convert.pdf", title: "PDF", wheel: "convert" },
+        { id: "convert.heic", title: "HEIC", wheel: "convert" },
+        { id: "tool.compress", title: "Compress", wheel: "tools" },
+        { id: "tool.half", title: "Half size", wheel: "tools" },
+      ],
+      size: 1258291,
+      mode: "drag",
+      drop_in_pixels: false,
+      native_glass: false,
+    };
+
+    fetch("../../app/ui/index.html")
+      .then((r) => r.text())
+      .then((html) => {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        doc.querySelectorAll("script").forEach((s) => s.remove());
+        document.body.insertAdjacentHTML("beforeend", doc.body.innerHTML);
+        const s = document.createElement("script");
+        s.src = "../../app/ui/wheel.js";
+        s.onload = () => { if (location.search.includes("demo")) emit("wheel:show", SAMPLE); };
+        document.body.appendChild(s);
+      });
+  </script>
+</body>
+</html>

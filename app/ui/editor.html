@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ShiftNinja editor</title>
+  <link rel="stylesheet" href="editor.css" />
+</head>
+<body>
+  <div id="ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+  <header class="glass">
+    <span class="mark" aria-hidden="true"></span>
+    <h1 id="title">Editor</h1>
+    <span id="filename"></span>
+  </header>
+  <main>
+    <div id="stage" class="glass">
+      <canvas id="view"></canvas>
+      <img id="original" alt="" />
+      <span id="original-tag">Original</span>
+      <div id="loading"><span class="spinner"></span><span>Opening…</span></div>
+      <div id="toolbar" class="glass pill">
+        <button id="zoom-out" type="button" title="Zoom out (−)">−</button>
+        <button id="zoom-level" type="button" title="Fit to window (0)">100%</button>
+        <button id="zoom-in" type="button" title="Zoom in (+)">+</button>
+        <span class="sep"></span>
+        <button id="compare" type="button" title="Hold to see the original (\)">Compare</button>
+      </div>
+    </div>
+    <aside id="controls" class="glass"></aside>
+  </main>
+  <footer>
+    <span id="status"></span>
+    <span class="keys"><kbd>Enter</kbd> save <kbd>Esc</kbd> close <kbd>Scroll</kbd> zoom</span>
+    <button id="cancel" class="ghost" type="button">Cancel</button>
+    <button id="save" class="primary" type="button" disabled>Save</button>
+  </footer>
+  <div id="toast" role="status"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg><span></span></div>
+  <script src="editor.js"></script>
+</body>
+</html>

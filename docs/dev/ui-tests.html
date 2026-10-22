@@ -1,0 +1,474 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ShiftNinja UI tests</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 20px; color: #17330f; background: #fff8f1; }
+    h1 { margin: 0 0 6px; }
+    .pass { color: #3f8e2e; }
+    .fail { color: #b4446c; font-weight: 700; }
+    #summary { font-weight: 700; }
+    iframe { width: 900px; height: 660px; border: 1px solid #e9e1d4; border-radius: 10px; background: #fff; }
+  </style>
+</head>
+<body>
+  <h1>ShiftNinja UI tests</h1>
+  <p id="summary">Running…</p>
+  <ol id="results"></ol>
+  <iframe id="frame"></iframe>
+<script>
+const frame = document.getElementById("frame");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function waitFor(fn, what = "condition", timeout = 5000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    try { const v = fn(); if (v) return v; } catch {  }
+    await sleep(20);
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
+
+async function load(url) {
+  frame.src = "about:blank";
+  await sleep(30);
+  frame.src = url;
+  await waitFor(() => frame.contentWindow.location.href.includes(url.split("?")[0].split("/").pop()) && frame.contentDocument.readyState === "complete", "page");
+  return frame.contentWindow;
+}
+
+async function openEditor(query) {
+  const w = await load(`editor-preview.html?${query}`);
+  await waitFor(() => !w.document.getElementById("save").disabled, "editor ready");
+  return w;
+}
+
+async function openWheel() {
+  const w = await load("wheel-preview.html");
+  await waitFor(() => typeof w.emit === "function" && w.eval("typeof sliceAt") === "function", "wheel ready");
+  return w;
+}
+
+function ptr(w, type, target, x, y) {
+  target.dispatchEvent(new w.PointerEvent(type, { clientX: x, clientY: y, bubbles: true, pointerId: 1, button: 0, buttons: type === "pointerup" ? 0 : 1 }));
+}
+function drag(w, from, to, steps = 6) {
+  const view = w.document.getElementById("view");
+  const r = view.getBoundingClientRect();
+  const doc = w.eval("doc");
+  const at = ([x, y]) => [r.left + (x / doc.w) * r.width, r.top + (y / doc.h) * r.height];
+  ptr(w, "pointerdown", view, ...at(from));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    ptr(w, "pointermove", w, ...at([from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t]));
+  }
+  ptr(w, "pointerup", w, ...at(to));
+}
+const click = (w, at) => drag(w, at, at, 1);
+function button(w, text) {
+  const b = [...w.document.querySelectorAll("#controls button")].find((x) => x.textContent === text);
+  if (!b) throw new Error(`no button "${text}"`);
+  b.click();
+}
+function swatch(w, group, index) {
+  const g = [...w.document.querySelectorAll("#controls .group")].find((x) => x.querySelector("h2")?.textContent === group);
+  g.querySelectorAll(".swatch")[index].click();
+}
+function slide(w, label, value) {
+  const l = [...w.document.querySelectorAll("label.slider")].find((x) => x.querySelector("span").firstChild.textContent === label);
+  const input = l.querySelector("input");
+  input.value = value;
+  input.dispatchEvent(new w.Event("input"));
+}
+function setText(w, value) {
+  const input = w.document.querySelector("#controls input[type=text]");
+  input.value = value;
+  input.dispatchEvent(new w.Event("input"));
+}
+const status = (w) => w.document.getElementById("status").textContent;
+
+async function save(w) {
+  const n = w.saved.length;
+  w.document.getElementById("save").click();
+  await waitFor(() => w.saved.length > n, "save");
+  return decode(w.saved[w.saved.length - 1]);
+}
+
+async function decode(entry) {
+  const img = new Image();
+  img.src = `data:image/${entry.ext === "jpg" ? "jpeg" : "png"};base64,${entry.data}`;
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext("2d");
+  g.drawImage(img, 0, 0);
+  return { ...entry, w: img.width, h: img.height, px: (x, y) => [...g.getImageData(Math.round(x), Math.round(y), 1, 1).data] };
+}
+
+const RED = [255, 0, 0], GREEN = [0, 255, 0], BLUE = [0, 0, 255], WHITE = [255, 255, 255], BLACK = [0, 0, 0];
+const near = (a, b, tol = 14) => b.every((v, i) => Math.abs(a[i] - v) <= tol);
+
+const TOOLS = [
+  { id: "tool.crop", title: "Crop", wheel: "tools", panel: "crop" },
+  { id: "tool.compress", title: "Compress", wheel: "tools", panel: null },
+  { id: "tool.strip", title: "Metadata", wheel: "tools", panel: null },
+  { id: "tool.edit", title: "Edit", wheel: "tools", panel: "edit" },
+  { id: "tool.annotate", title: "Annotate", wheel: "tools", panel: "annotate" },
+  { id: "tool.addbg", title: "Add BG", wheel: "tools", panel: "addbg" },
+  { id: "tool.redact", title: "Redact", wheel: "tools", panel: "redact" },
+];
+const CONVERT = ["JPG", "PNG", "TXT"].map((t) => ({ id: `convert.${t.toLowerCase()}`, title: t, wheel: "convert", panel: null }));
+const showWheel = (w, actions, extra = {}) =>
+  w.emit("wheel:show", { paths: ["/Users/me/Desktop/Page 001.pdf"], actions, size: 1258291, mode: "drag", drop_in_pixels: false, native_glass: false, ...extra });
+const petalCentre = (i, n) => {
+  const a = -Math.PI / 2 - Math.PI / n + (i * 2 * Math.PI) / n + Math.PI / n;
+  return [160 + 98 * Math.cos(a), 160 + 98 * Math.sin(a)];
+};
+const hotTitle = (w) => w.document.querySelector(".slice.hot text")?.textContent;
+
+const TESTS = [
+  ["Wheel: draws one rounded petal with an icon and label per action", async (t) => {
+    const w = await openWheel(); showWheel(w, [...CONVERT, ...TOOLS]);
+    t.eq(w.document.querySelectorAll(".slice").length, 3, "convert wheel shows 3 petals");
+    t.eq(w.document.querySelectorAll(".slice .icon").length, 3, "each petal has an icon");
+    w.emit("wheel:cycle");
+    t.eq([...w.document.querySelectorAll(".slice text")].map((x) => x.textContent).join(","), "CROP,COMPRESS,METADATA,EDIT,ANNOTATE,ADD BG,REDACT", "tools wheel order matches the reel");
+    t.ok(w.document.querySelector(".slice .petal").getAttribute("d").includes("A"), "petals are arc shapes");
+  }],
+  ["Wheel: hit-testing lines up with every drawn petal", async (t) => {
+    const w = await openWheel();
+    for (const n of [1, 2, 3, 6, 7, 8]) {
+      const acts = Array.from({ length: n }, (_, i) => ({ id: `convert.f${i}`, title: `F${i}`, wheel: "convert", panel: null }));
+      showWheel(w, acts);
+      for (let i = 0; i < n; i++) {
+        const [x, y] = n === 1 ? [160, 62] : petalCentre(i, n);
+        t.eq(w.eval(`sliceAt(${x}, ${y})`), i, `${n} petals: centre of petal ${i}`);
+      }
+    }
+    t.eq(w.eval("sliceAt(160, 160)"), -1, "hub is not a slice");
+    t.eq(w.eval("sliceAt(160, 2)"), -1, "outside the wheel is not a slice");
+  }],
+  ["Wheel: at most 8 petals", async (t) => {
+    const w = await openWheel();
+    showWheel(w, Array.from({ length: 11 }, (_, i) => ({ id: `convert.f${i}`, title: `F${i}`, wheel: "convert", panel: null })));
+    t.eq(w.document.querySelectorAll(".slice").length, 8, "capped at 8");
+  }],
+  ["Wheel: hovering while dragging lights the right petal; hub says what will happen", async (t) => {
+    const w = await openWheel(); showWheel(w, TOOLS);
+    w.drag("over", ...petalCentre(1, 7));
+    t.eq(hotTitle(w), "COMPRESS", "petal under the pointer is hot");
+    t.eq(w.document.getElementById("hub-bottom").textContent, "DROP TO RUN", "one-click tool");
+    w.drag("over", ...petalCentre(0, 7));
+    t.eq(w.document.getElementById("hub-bottom").textContent, "DROP TO OPEN", "panel tool");
+    w.drag("over", 160, 160);
+    t.eq(hotTitle(w), undefined, "hub clears the highlight");
+  }],
+  ["Wheel: dropping on a panel tool opens its editor, not the engine", async (t) => {
+    const w = await openWheel(); showWheel(w, TOOLS); w.log.length = 0;
+    w.drag("drop", ...petalCentre(0, 7), ["/Users/me/Desktop/Page 001.pdf"]);
+    await waitFor(() => w.log.some(([c]) => c === "hide_wheel"), "hide");
+    const call = w.log.find(([c]) => c === "open_panel");
+    t.ok(call, "open_panel called");
+    t.eq(JSON.stringify(call?.[1]), JSON.stringify({ panel: "crop", path: "/Users/me/Desktop/Page 001.pdf" }), "with the crop panel and the file");
+    t.ok(!w.log.some(([c]) => c === "run_action"), "nothing run directly");
+  }],
+  ["Wheel: dropping on a one-click tool runs it", async (t) => {
+    const w = await openWheel(); showWheel(w, TOOLS); w.log.length = 0;
+    w.drag("drop", ...petalCentre(1, 7), ["/Users/me/Desktop/Page 001.pdf"]);
+    await waitFor(() => w.log.some(([c]) => c === "run_action"), "run");
+    t.eq(w.log.find(([c]) => c === "run_action")[1].id, "tool.compress", "compress ran");
+  }],
+  ["Wheel: dropping on the hub cancels", async (t) => {
+    const w = await openWheel(); showWheel(w, TOOLS); w.log.length = 0;
+    w.drag("drop", 160, 160, ["/x.pdf"]);
+    await sleep(50);
+    t.ok(w.log.some(([c]) => c === "hide_wheel") && !w.log.some(([c]) => c === "run_action" || c === "open_panel"), "hidden, nothing run");
+  }],
+  ["Wheel: shortcut mode numbers the petals and keys run them", async (t) => {
+    const w = await openWheel(); showWheel(w, TOOLS, { mode: "shortcut" }); w.log.length = 0;
+    t.eq([...w.document.querySelectorAll(".slice .key")].map((k) => k.textContent).join(""), "1234567", "numbers 1–7");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "2" }));
+    await waitFor(() => w.log.some(([c]) => c === "run_action"), "run");
+    t.eq(w.log.find(([c]) => c === "run_action")[1].id, "tool.compress", "key 2 = Compress");
+  }],
+  ["Wheel: Shift cycles wheels; Escape closes", async (t) => {
+    const w = await openWheel(); showWheel(w, [...CONVERT, ...TOOLS]); w.log.length = 0;
+    t.eq(w.document.getElementById("hub-bottom").textContent, "CONVERT", "starts on Convert");
+    w.emit("wheel:cycle");
+    t.eq(w.document.getElementById("hub-bottom").textContent, "TOOLS", "then Tools");
+    w.emit("wheel:cycle");
+    t.eq(w.document.getElementById("hub-bottom").textContent, "CONVERT", "and back");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape" }));
+    t.ok(w.log.some(([c]) => c === "hide_wheel"), "Escape hides");
+  }],
+  ["Wheel: Wayland flow fetches slices when the file enters", async (t) => {
+    const w = await openWheel();
+    w.__TAURI__.core.invoke = async (cmd, args) => { w.log.push([cmd, args]); if (cmd === "actions_for") return { actions: TOOLS, size: 2048 }; };
+    showWheel(w, [], { paths: [] });
+    t.eq(w.document.getElementById("hub-bottom").textContent, "READING FILE", "waiting for the file");
+    w.drag("enter", 10, 10, ["/home/me/Shot.png"]);
+    await waitFor(() => w.document.querySelectorAll(".slice").length === 7, "slices");
+    t.ok(w.log.some(([c, a]) => c === "actions_for" && a.paths[0] === "/home/me/Shot.png"), "asked the app for slices");
+  }],
+  ["Wheel: one action draws a full ring", async (t) => {
+    const w = await openWheel(); showWheel(w, [CONVERT[0]]);
+    t.eq(w.document.querySelectorAll(".slice").length, 1, "one petal");
+    t.eq(w.eval("sliceAt(160, 62)"), 0, "the ring is hit-testable");
+  }],
+
+  ["Crop: dragging a corner crops to that box", async (t) => {
+    const w = await openEditor("mode=crop");
+    t.eq(w.document.getElementById("title").textContent, "Crop image", "title");
+    drag(w, [1200, 800], [600, 400]);
+    t.ok(w.document.querySelector(".dims").textContent === "600 × 400 px", "size readout");
+    const out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "600x400", "output size");
+    t.ok(near(out.px(5, 5), RED) && near(out.px(595, 395), RED), "only the red quarter left");
+    t.eq(out.suffix, "Cropped", "named … Cropped");
+    t.eq(out.ext, "png", "PNG source stays PNG");
+    await waitFor(() => w.closedByApp, "window closes after saving");
+  }],
+  ["Crop: 1:1 ratio, then moving the box clamps at the edge", async (t) => {
+    const w = await openEditor("mode=crop");
+    button(w, "1:1");
+    t.eq(w.document.querySelector(".dims").textContent, "800 × 800 px", "largest square");
+    drag(w, [600, 400], [1600, 400]);
+    const out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "800x800", "still square");
+    t.ok(near(out.px(5, 5), RED) && near(out.px(300, 5), GREEN) && near(out.px(795, 795), WHITE), "box sits at the right edge (x 400–1200)");
+  }],
+  ["Crop: ratio holds while resizing from a corner and an edge", async (t) => {
+    const w = await openEditor("mode=crop");
+    button(w, "16:9");
+    drag(w, [1200, 737.5], [900, 600]);
+    let r = w.eval("Crop.rect");
+    t.ok(Math.abs(r.w / r.h - 16 / 9) < 0.01, `corner keeps 16:9 (${(r.w / r.h).toFixed(3)})`);
+    const s = w.eval("Crop.handles().s");
+    drag(w, s, [s[0], s[1] - 100]);
+    r = w.eval("Crop.rect");
+    t.ok(Math.abs(r.w / r.h - 16 / 9) < 0.01, `edge keeps 16:9 (${(r.w / r.h).toFixed(3)})`);
+    t.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= 1200.01 && r.y + r.h <= 800.01, "inside the image");
+  }],
+  ["Crop: drawing a new box outside the old one", async (t) => {
+    const w = await openEditor("mode=crop");
+    drag(w, [1200, 800], [300, 200]);
+    drag(w, [700, 500], [1000, 700]);
+    const out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "300x200", "new box size");
+    t.ok(near(out.px(150, 100), WHITE), "white quarter");
+  }],
+  ["Crop: Original ratio, Free resets, tiny drags ignored", async (t) => {
+    const w = await openEditor("mode=crop");
+    button(w, "Original");
+    const r = w.eval("Crop.rect");
+    t.ok(Math.abs(r.w / r.h - 1.5) < 0.01, "original 3:2");
+    button(w, "Free");
+    t.eq(w.eval("Crop.ratio"), null, "free");
+    drag(w, [1200, 800], [600, 400]);
+    drag(w, [900, 700], [902, 701]);
+    t.eq(JSON.stringify(w.eval("Crop.rect")), JSON.stringify({ x: 0, y: 0, w: 600, h: 400 }), "box unchanged");
+  }],
+  ["Crop: JPG photo saves as JPG; PDF says page 1", async (t) => {
+    let w = await openEditor("mode=crop&ext=jpg");
+    drag(w, [1200, 800], [600, 400]);
+    const out = await save(w);
+    t.eq(out.ext, "jpg", "JPG stays JPG");
+    t.ok(near(out.px(300, 200), RED, 20), "content survives JPEG");
+    w = await openEditor("mode=crop&name=Scan.pdf");
+    t.eq(w.document.getElementById("filename").textContent, "Scan.pdf · page 1", "PDF label");
+  }],
+  ["Crop: Enter saves, Escape cancels", async (t) => {
+    let w = await openEditor("mode=crop");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter" }));
+    await waitFor(() => w.saved.length === 1, "Enter saves");
+    t.ok(true, "Enter saved");
+    w = await openEditor("mode=crop");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape" }));
+    t.ok(w.closedByApp && w.saved.length === 0, "Escape closes without saving");
+  }],
+
+  ["Edit: rotate right turns the image a quarter clockwise", async (t) => {
+    const w = await openEditor("mode=edit");
+    button(w, "⟳ Right");
+    const out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "800x1200", "portrait now");
+    t.ok(near(out.px(5, 5), BLUE), "top-left was bottom-left (blue)");
+    t.ok(near(out.px(795, 5), RED), "top-right was top-left (red)");
+    t.eq(out.suffix, "Edited", "named … Edited");
+  }],
+  ["Edit: rotate left, flips and size", async (t) => {
+    let w = await openEditor("mode=edit");
+    button(w, "⟲ Left");
+    let out = await save(w);
+    t.ok(near(out.px(5, 5), GREEN), "left turn: top-left was top-right (green)");
+    w = await openEditor("mode=edit");
+    button(w, "⇋ Flip");
+    out = await save(w);
+    t.ok(near(out.px(5, 5), GREEN) && near(out.px(1195, 5), RED), "horizontal flip");
+    w = await openEditor("mode=edit");
+    button(w, "⇵ Flip");
+    out = await save(w);
+    t.ok(near(out.px(5, 5), BLUE), "vertical flip");
+    w = await openEditor("mode=edit");
+    button(w, "50%");
+    out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "600x400", "half size");
+    t.ok(near(out.px(5, 5), RED) && near(out.px(595, 395), WHITE), "content scaled");
+  }],
+  ["Edit: brightness, contrast and saturation change the pixels", async (t) => {
+    let w = await openEditor("mode=edit");
+    slide(w, "Saturation", -100);
+    let out = await save(w);
+    const p = out.px(100, 100);
+    t.ok(Math.abs(p[0] - p[1]) < 4 && Math.abs(p[1] - p[2]) < 4, `no saturation → grey (${p.slice(0, 3)})`);
+    w = await openEditor("mode=edit");
+    slide(w, "Brightness", -50);
+    out = await save(w);
+    t.ok(near(out.px(1000, 700), [128, 128, 128], 6), `white darkens to mid grey (${out.px(1000, 700).slice(0, 3)})`);
+    w = await openEditor("mode=edit");
+    slide(w, "Contrast", -100);
+    out = await save(w);
+    t.ok(near(out.px(1000, 700), [128, 128, 128], 6), "no contrast → flat grey");
+    t.eq(w.document.querySelector("label.slider output").textContent, "0", "untouched slider reads 0");
+  }],
+
+  ["Annotate: arrow, box, pen, highlight in the chosen colour", async (t) => {
+    const w = await openEditor("mode=annotate");
+    swatch(w, "Colour", 0);
+    drag(w, [700, 500], [1100, 700]);
+    button(w, "Box");
+    drag(w, [650, 450], [1150, 780]);
+    button(w, "Pen");
+    drag(w, [700, 760], [1100, 760], 12);
+    button(w, "Highlight");
+    swatch(w, "Colour", 4);
+    drag(w, [650, 600], [1150, 600]);
+    t.eq(status(w), "4 marks", "four marks");
+    const out = await save(w);
+    const purple = [0x6f, 0x5b, 0xe0];
+    const hl = out.px(1050, 600);
+    t.ok(hl[0] > 235 && hl[2] < 225 && hl[2] > 120, `highlight tints amber, doesn't cover (${hl.slice(0, 3)})`);
+    t.ok(near(out.px(1150, 615), purple, 30), "box edge is purple");
+    t.ok(near(out.px(900, 760), purple, 30), "pen stroke is purple");
+    t.ok(near(out.px(800, 550), purple, 40), "arrow line is purple");
+    t.eq(out.suffix, "Annotated", "named … Annotated");
+  }],
+  ["Annotate: text, undo, clear, and clicks don't make empty marks", async (t) => {
+    const w = await openEditor("mode=annotate");
+    click(w, [800, 600]);
+    t.eq(status(w), "0 marks", "a click isn't an arrow");
+    button(w, "Text");
+    setText(w, "this one!");
+    click(w, [700, 600]);
+    t.eq(status(w), "1 mark", "text placed");
+    const out = await save(w);
+    let inked = 0;
+    for (let x = 700; x < 900; x += 2) if (!near(out.px(x, 600), WHITE, 20)) inked++;
+    t.ok(inked > 10, `text drawn (${inked} inked samples)`);
+    button(w, "Pen"); drag(w, [100, 100], [300, 300]);
+    button(w, "Undo");
+    t.eq(status(w), "1 mark", "undo removes the last mark");
+    button(w, "Clear");
+    t.eq(status(w), "0 marks", "clear removes all");
+    setText(w, "   ");
+    button(w, "Text"); click(w, [100, 100]);
+    t.eq(status(w), "0 marks", "blank text isn't placed");
+  }],
+
+  ["Add BG: default square, purple gradient, rounded corners, PNG", async (t) => {
+    const w = await openEditor("mode=addbg&ext=jpg");
+    const out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "1488x1488", "12% padding, 1:1");
+    t.eq(out.ext, "png", "always PNG");
+    t.eq(out.suffix, "With Background", "named … With Background");
+    t.ok(near(out.px(2, 2), [0x7c, 0x6c, 0xf0], 10), "gradient starts brand purple");
+    t.ok(near(out.px(1485, 1485), [0x4b, 0x55, 0xd8], 10), "ends indigo");
+    t.ok(near(out.px(144 + 100, 344 + 100), RED), "image placed in the middle");
+    t.ok(!near(out.px(145, 345), RED, 40), "corner is rounded off");
+  }],
+  ["Add BG: shapes, padding, solid colours", async (t) => {
+    let w = await openEditor("mode=addbg");
+    button(w, "Auto");
+    let out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "1488x1088", "auto keeps the image's shape");
+    w = await openEditor("mode=addbg");
+    button(w, "16:9");
+    out = await save(w);
+    t.ok(Math.abs(out.w / out.h - 16 / 9) < 0.01, `16:9 (${out.w}x${out.h})`);
+    w = await openEditor("mode=addbg");
+    button(w, "Auto");
+    slide(w, "Padding", 0);
+    slide(w, "Corners", 0);
+    slide(w, "Shadow", 0);
+    out = await save(w);
+    t.eq(`${out.w}x${out.h}`, "1200x800", "no padding = image size");
+    t.ok(near(out.px(0, 0), RED), "square corners when 0");
+    w = await openEditor("mode=addbg");
+    swatch(w, "Background", 6);
+    out = await save(w);
+    t.ok(near(out.px(3, 3), [0x17, 0x33, 0x0f], 4), "solid ink");
+  }],
+
+  ["Redact: black boxes hide the area completely", async (t) => {
+    const w = await openEditor("mode=redact");
+    drag(w, [650, 50], [1150, 350]);
+    t.eq(status(w), "1 area hidden", "counted");
+    const out = await save(w);
+    t.ok(near(out.px(900, 200), BLACK, 2) && near(out.px(655, 55), BLACK, 2), "black inside");
+    t.ok(near(out.px(640, 200), GREEN) && near(out.px(900, 360), GREEN), "untouched outside");
+    t.eq(out.suffix, "Redacted", "named … Redacted");
+  }],
+  ["Redact: pixelate makes even blocks; undo, clear, tiny drags", async (t) => {
+    const w = await openEditor("mode=redact");
+    button(w, "Pixelate");
+    drag(w, [500, 300], [700, 500]);
+    let out = await save(w);
+    t.ok(JSON.stringify(out.px(505, 305)) === JSON.stringify(out.px(530, 330)), "one block is one colour");
+    t.ok(!near(out.px(599, 399), RED, 2) || !near(out.px(601, 401), WHITE, 2), "detail is gone");
+    drag(w, [10, 10], [11, 11]);
+    t.eq(status(w), "1 area hidden", "tiny drag ignored");
+    drag(w, [10, 10], [100, 100]);
+    button(w, "Undo");
+    t.eq(status(w), "1 area hidden", "undo");
+    button(w, "Clear");
+    t.eq(status(w), "0 areas hidden", "clear");
+  }],
+
+  ["Errors: a file that can't load, and a save that fails", async (t) => {
+    let w = await load("editor-preview.html?mode=crop&fail=load");
+    await waitFor(() => w.document.getElementById("status").textContent.includes("Couldn't open"), "load error");
+    t.ok(w.document.getElementById("save").disabled, "Save stays off");
+    w = await openEditor("mode=redact");
+    w.failSave = true;
+    w.document.getElementById("save").click();
+    await waitFor(() => w.document.getElementById("status").classList.contains("error"), "save error");
+    t.ok(status(w).includes("disk full"), "error shown");
+    t.ok(!w.document.getElementById("save").disabled && !w.closedByApp, "can try again; window stays");
+  }],
+];
+
+(async () => {
+  const list = document.getElementById("results");
+  let passed = 0, failed = 0;
+  const report = [];
+  for (const [name, fn] of TESTS) {
+    const fails = [];
+    const t = {
+      ok: (cond, msg) => { if (msg && !cond) fails.push(msg); },
+      eq: (a, b, msg) => { if (a !== b) fails.push(`${msg}: got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`); },
+    };
+    try { await fn(t); } catch (e) { fails.push(`threw: ${e.message || e}`); }
+    const li = document.createElement("li");
+    li.className = fails.length ? "fail" : "pass";
+    li.textContent = `${fails.length ? "FAIL" : "PASS"} · ${name}${fails.length ? " — " + fails.join("; ") : ""}`;
+    list.appendChild(li);
+    fails.length ? failed++ : passed++;
+    report.push({ name, ok: !fails.length, fails });
+  }
+  document.getElementById("summary").textContent = `${passed} passed, ${failed} failed`;
+  window.testResults = { passed, failed, report };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+name: Release
+
+# Push a tag like v0.2.0 and this builds the installer and publishes it as ShiftNinja-Setup.exe, which is
+# what the README's download button always points to (…/releases/latest/download/ShiftNinja-Setup.exe).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch Pdfium
+        shell: bash
+        run: scripts/fetch-pdfium.sh win-x64
+
+      - name: Build the installer
+        working-directory: app
+        run: |
+          npm ci
+          npx tauri build
+
+      - name: Publish ShiftNinja-Setup.exe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists (uploaded by hand); leaving it as is."
+            exit 0
+          fi
+          cp target/release/bundle/nsis/*-setup.exe ShiftNinja-Setup.exe
+          gh release create "${{ github.ref_name }}" ShiftNinja-Setup.exe \
+            --title "ShiftNinja ${{ github.ref_name }}" \
+            --notes "Download **ShiftNinja-Setup.exe** below, double-click it and click Install. If Windows says \"Windows protected your PC\", click **More info → Run anyway**."

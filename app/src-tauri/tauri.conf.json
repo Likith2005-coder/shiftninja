@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ShiftNinja",
+  "identifier": "in.shiftninja.app",
+  "version": "0.1.0",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "wheel",
+        "url": "index.html",
+        "title": "ShiftNinja",
+        "width": 320,
+        "height": 320,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "shadow": false,
+        "focus": false,
+        "visibleOnAllWorkspaces": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "category": "Utility",
+    "shortDescription": "PDF, Word and photo tools on a Shift wheel",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../lib/*": "lib/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    },
+    "longDescription": "ShiftNinja converts PDF to Word and back, merges, splits and compresses PDFs, makes passport photo sheets and converts images. Works offline.",
+    "publisher": "Likith B S",
+    "copyright": "© 2026 Likith B S",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

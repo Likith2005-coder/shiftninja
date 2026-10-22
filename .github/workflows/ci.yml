@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fetch Pdfium
+        shell: bash
+        run: scripts/fetch-pdfium.sh win-x64
+
+      - name: Engine tests
+        shell: bash
+        run: SHIFTNINJA_PDFIUM="$PWD/lib" SHIFTNINJA_OFFICE=builtin cargo test -p shiftninja-engine
+
+      - name: Build the app
+        run: cargo build -p shiftninja-cli -p shiftninja

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Card preview</title>
+</head>
+<body>
+  <script>
+    // Preview the card without the app: ?lang=hi
+    const params = new URLSearchParams(location.search);
+    try { localStorage.setItem("lang", params.get("lang") || "en"); } catch {}
+    window.__SHIFTNINJA__ = { glass: false };
+    window.__TAURI__ = {
+      core: {
+        invoke: async (cmd, args) => {
+          if (cmd === "app_info") return { name: "ShiftNinja", version: "0.1.0", shortcut: "Ctrl + Alt + Space" };
+          if (cmd === "autostart_enabled") return true;
+          if (cmd === "set_autostart") return args.on;
+          throw `unknown command ${cmd}`;
+        },
+      },
+      window: { getCurrentWindow: () => ({ close() {} }) },
+    };
+    fetch("../../app/ui/card.html").then((r) => r.text()).then((html) => {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      doc.querySelectorAll("script").forEach((s) => s.remove());
+      document.head.innerHTML += '<link rel="stylesheet" href="../../app/ui/card.css" />';
+      document.body.innerHTML = doc.body.innerHTML;
+      for (const src of ["../../app/ui/card.js"]) {
+        const s = document.createElement("script");
+        s.src = src;
+        s.async = false;
+        document.body.appendChild(s);
+      }
+    });
+  </script>
+</body>
+</html>

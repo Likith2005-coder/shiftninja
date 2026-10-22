@@ -1,0 +1,9 @@
+Copyright (c) 2026 Likith B S. All rights reserved.
+
+ShiftNinja and its source code are the property of Likith B S. You may not copy,
+modify, distribute or sell this software, in whole or in part, without written
+permission from Likith B S.
+
+Third-party components keep their own licences:
+- PDFium: BSD-3-Clause / Apache-2.0
+- Inter Tight font (app/ui/fonts/OFL.txt): SIL Open Font License 1.1

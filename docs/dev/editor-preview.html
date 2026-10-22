@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Editor preview</title>
+  <link rel="stylesheet" href="../../app/ui/editor.css" />
+</head>
+<body>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const ext = params.get("ext") === "jpg" ? "jpg" : "png";
+    const name = params.get("name") || `Test Image.${ext}`;
+    window.__SHIFTNINJA_EDIT__ = { mode: params.get("mode") || "crop", path: `/Users/me/Desktop/${name}` };
+    window.saved = [];
+    window.closedByApp = false;
+    window.failSave = false;
+
+    function testImage(w = 1200, h = 800) {
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      const g = c.getContext("2d");
+      [["#ff0000", 0, 0], ["#00ff00", w / 2, 0], ["#0000ff", 0, h / 2], ["#ffffff", w / 2, h / 2]].forEach(([col, x, y]) => {
+        g.fillStyle = col; g.fillRect(x, y, w / 2, h / 2);
+      });
+      return c.toDataURL("image/png");
+    }
+
+    window.__TAURI__ = {
+      core: {
+        invoke: async (cmd, args) => {
+          if (cmd === "load_for_edit") {
+            if (params.get("fail") === "load") throw "file not found";
+            return { data_url: testImage(), width: 1200, height: 800, ext, name };
+          }
+          if (cmd === "save_edit") {
+            if (window.failSave) throw "disk full";
+            window.saved.push(args);
+            return `/Users/me/Desktop/${name.replace(/\.\w+$/, "")} ${args.suffix}.${args.ext}`;
+          }
+          throw `unknown command ${cmd}`;
+        },
+      },
+      window: { getCurrentWindow: () => ({ close: () => { window.closedByApp = true; } }) },
+    };
+
+    fetch("../../app/ui/editor.html")
+      .then((r) => r.text())
+      .then((html) => {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        doc.querySelectorAll("script").forEach((s) => s.remove());
+        document.body.innerHTML = doc.body.innerHTML;
+        const s = document.createElement("script");
+        s.src = "../../app/ui/editor.js";
+        document.body.appendChild(s);
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["engine", "cli", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "LicenseRef-Proprietary"
+repository = "https://github.com/likith2005-coder/shiftninja"
+
+[profile.release]
+lto = true
+strip = true

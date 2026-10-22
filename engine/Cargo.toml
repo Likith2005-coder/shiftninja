@@ -1,0 +1,22 @@
+[package]
+name = "shiftninja-engine"
+description = "Every ShiftNinja action: format conversions and file tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "engine"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "tiff", "bmp", "gif", "ico"] }
+pdfium-render = { version = "0.9", default-features = false, features = ["pdfium_latest", "image_latest", "thread_safe"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+resvg = "0.45"
+base64 = "0.22"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
